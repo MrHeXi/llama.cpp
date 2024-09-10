@@ -27,7 +27,7 @@ void             gpt_log_free  (struct gpt_log * log);
 LOG_ATTRIBUTE_FORMAT(4, 5)
 void gpt_log_add(struct gpt_log * log, enum ggml_log_level level, int verbosity, const char * fmt, ...);
 
-void gpt_log_set_file      (struct gpt_log * log, const char * file);
+void gpt_log_set_file      (struct gpt_log * log, const char * file); // not thread-safe
 void gpt_log_set_timestamps(struct gpt_log * log, bool timestamps);
 
 #define LOG_TMPL(level, verbosity, ...) \

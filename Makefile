@@ -54,6 +54,7 @@ TEST_TARGETS = \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
 	tests/test-llama-grammar \
+	tests/test-log \
 	tests/test-model-load-cancel \
 	tests/test-opt \
 	tests/test-quantize-fns \
@@ -1529,6 +1530,11 @@ tests/test-arg-parser: tests/test-arg-parser.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-log: tests/test-log.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)

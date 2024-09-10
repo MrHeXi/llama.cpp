@@ -5,8 +5,6 @@
 #include <cstdio>
 #include <condition_variable>
 
-#define LOG_MAX_MESSAGE_SIZE (256)
-
 #define LOG_COLORS // TMP
 
 #ifdef LOG_COLORS
@@ -41,11 +39,7 @@ struct gpt_log_entry {
     int verbosity;
     int64_t timestamp;
 
-    // static-sized message
-    char msg_stck[LOG_MAX_MESSAGE_SIZE];
-
-    // if it doesn't fit in the stack, it goes here
-    std::vector<char> msg_heap;
+    std::vector<char> msg;
 
     // signals the worker thread to stop
     bool is_end;
@@ -79,11 +73,7 @@ struct gpt_log_entry {
             }
         }
 
-        if (msg_heap.empty()) {
-            fprintf(file, "%s", msg_stck);
-        } else {
-            fprintf(file, "%s", msg_heap.data());
-        }
+        fprintf(file, "%s", msg.data());
 
         fflush(file);
     }
@@ -98,7 +88,6 @@ struct gpt_log {
         entries.resize(capacity);
         head = 0;
         tail = 0;
-        buffer.resize(1024);
 
         resume();
     }
@@ -111,9 +100,7 @@ struct gpt_log {
     }
 
 private:
-    std::mutex mtx_inp;
-    std::mutex mtx_wrk;
-
+    std::mutex mtx;
     std::thread thrd;
     std::condition_variable cv;
 
@@ -129,38 +116,26 @@ private:
     size_t head;
     size_t tail;
 
-    // print the message here before pushing
-    std::vector<char> buffer;
+    // worker thread copies into this
+    gpt_log_entry cur;
 
 public:
     void add(enum ggml_log_level level, int verbosity, const char * fmt, va_list args) {
-        std::unique_lock<std::mutex> lock_inp(mtx_inp);
+        std::lock_guard<std::mutex> lock(mtx);
 
         if (!running) {
             return;
         }
 
-        const size_t n = vsnprintf(buffer.data(), buffer.size(), fmt, args);
-        if (n >= buffer.size()) {
-            buffer.resize(n + 1);
-            vsnprintf(buffer.data(), buffer.size(), fmt, args);
-        }
-
-        std::lock_guard<std::mutex> lock_wrk(mtx_wrk);
-
         auto & entry = entries[tail];
 
-        if (n < LOG_MAX_MESSAGE_SIZE) {
-            memcpy(entry.msg_stck, buffer.data(), n);
-            entry.msg_stck[n] = '\0';
-            entry.msg_heap.clear();
-        } else {
-            entry.msg_heap.resize(n + 1);
-            memcpy(entry.msg_heap.data(), buffer.data(), n);
-            entry.msg_heap[n] = '\0';
+        {
+            const size_t n = vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args);
+            if (n >= entry.msg.size()) {
+                entry.msg.resize(n + 1);
+                vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args);
+            }
         }
-
-        lock_inp.unlock();
 
         entry.level = level;
         entry.verbosity = verbosity;
@@ -173,20 +148,18 @@ public:
         tail = (tail + 1) % entries.size();
         if (tail == head) {
             // expand the buffer
-            size_t new_size = entries.size() * 2;
-            std::vector<gpt_log_entry> new_entries(new_size);
+            std::vector<gpt_log_entry> new_entries(2*entries.size());
 
-            size_t new_head = 0;
             size_t new_tail = 0;
 
-            while (head != tail) {
-                new_entries[new_tail] = entries[head];
+            do {
+                new_entries[new_tail] = std::move(entries[head]);
 
-                head = (head + 1) % entries.size();
-                new_tail = (new_tail + 1) % new_size;
-            }
+                head     = (head     + 1) % entries.size();
+                new_tail = (new_tail + 1);
+            } while (head != tail);
 
-            head = new_head;
+            head = 0;
             tail = new_tail;
 
             entries = std::move(new_entries);
@@ -196,7 +169,7 @@ public:
     }
 
     void resume() {
-        std::lock_guard<std::mutex> lock_inp(mtx_inp);
+        std::lock_guard<std::mutex> lock(mtx);
 
         if (running) {
             return;
@@ -206,35 +179,37 @@ public:
 
         thrd = std::thread([this]() {
             while (true) {
-                std::unique_lock<std::mutex> lock_wrk(mtx_wrk);
-                cv.wait(lock_wrk, [this]() { return head != tail; });
+                {
+                    std::unique_lock<std::mutex> lock(mtx);
+                    cv.wait(lock, [this]() { return head != tail; });
 
-                auto & entry = entries[head];
+                    cur = entries[head];
 
-                if (entry.is_end) {
+                    head = (head + 1) % entries.size();
+                }
+
+                if (cur.is_end) {
                     break;
                 }
 
-                entry.print(stdout);
+                cur.print(stdout);
 
                 if (file) {
-                    entry.print(file);
+                    cur.print(file);
                 }
-
-                head = (head + 1) % entries.size();
             }
         });
     }
 
     void pause() {
-        std::lock_guard<std::mutex> lock_inp(mtx_inp);
-
-        if (!running) {
-            return;
-        }
-
         {
-            std::lock_guard<std::mutex> lock_wrk(mtx_wrk);
+            std::lock_guard<std::mutex> lock(mtx);
+
+            if (!running) {
+                return;
+            }
+
+            running = false;
 
             auto & entry = entries[tail];
 
@@ -246,13 +221,10 @@ public:
         }
 
         thrd.join();
-
-        running = false;
     }
 
     void set_file(const char * path) {
-        std::lock_guard<std::mutex> lock_inp(mtx_inp);
-        std::lock_guard<std::mutex> lock_wrk(mtx_wrk);
+        pause();
 
         if (file) {
             fclose(file);
@@ -263,11 +235,12 @@ public:
         } else {
             file = nullptr;
         }
+
+        resume();
     }
 
     void set_timestamps(bool timestamps) {
-        std::lock_guard<std::mutex> lock_inp(mtx_inp);
-        std::lock_guard<std::mutex> lock_wrk(mtx_wrk);
+        std::lock_guard<std::mutex> lock(mtx);
 
         this->timestamps = timestamps;
     }

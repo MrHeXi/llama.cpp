@@ -1,0 +1,38 @@
+#include "log.h"
+
+#include <thread>
+
+int main() {
+    const int n_thread = 8;
+    const int n_msg = 1000;
+
+    std::thread threads[n_thread];
+    for (int i = 0; i < n_thread; i++) {
+        threads[i] = std::thread([i]() {
+            for (int j = 0; j < n_msg; j++) {
+                const int log_type = std::rand() % 4;
+
+                switch (log_type) {
+                    case 0: LOG_INF("Thread %d: %d\n", i, j); break;
+                    case 1: LOG_WRN("Thread %d: %d\n", i, j); break;
+                    case 2: LOG_ERR("Thread %d: %d\n", i, j); break;
+                    case 3: LOG_DBG("Thread %d: %d\n", i, j); break;
+                    default:
+                        break;
+                }
+
+                if (rand () % 10 < 5) {
+                    gpt_log_set_timestamps(gpt_log_main(), rand() % 2);
+                }
+            }
+        });
+    }
+
+    for (int i = 0; i < n_thread; i++) {
+        threads[i].join();
+    }
+
+    gpt_log_pause(gpt_log_main());
+
+    return 0;
+}
