@@ -3,6 +3,7 @@
 #endif
 
 #include "common.h"
+#include "log.h"
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
@@ -25,6 +26,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <thread>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
@@ -48,7 +50,6 @@
 #if defined(LLAMA_USE_CURL)
 #include <curl/curl.h>
 #include <curl/easy.h>
-#include <thread>
 #include <future>
 #endif
 

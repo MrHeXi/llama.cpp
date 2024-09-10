@@ -4,11 +4,9 @@
 
 #include "llama.h"
 
-#define LOG_NO_FILE_LINE_FUNCTION
-#include "log.h"
-
 #include <string>
 #include <vector>
+#include <sstream>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'

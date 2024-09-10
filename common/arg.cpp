@@ -1,15 +1,17 @@
 #include "arg.h"
 
+#include "log.h"
 #include "sampling.h"
 
 #include <algorithm>
-#include <string>
-#include <vector>
-#include <set>
+#include <climits>
+#include <cstdarg>
 #include <fstream>
 #include <regex>
-#include <cstdarg>
-#include <climits>
+#include <set>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "json-schema-to-grammar.h"
 
@@ -1951,34 +1953,18 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
 #ifndef LOG_DISABLE_LOGS
     // TODO: make this looks less weird
     add_opt(llama_arg(
-        {"--log-test"},
-        "Log test",
-        [](gpt_params &) { log_param_single_parse("--log-test"); }
-    ));
-    add_opt(llama_arg(
         {"--log-disable"},
         "Log disable",
-        [](gpt_params &) { log_param_single_parse("--log-disable"); }
-    ));
-    add_opt(llama_arg(
-        {"--log-enable"},
-        "Log enable",
-        [](gpt_params &) { log_param_single_parse("--log-enable"); }
-    ));
-    add_opt(llama_arg(
-        {"--log-new"},
-        "Log new",
-        [](gpt_params &) { log_param_single_parse("--log-new"); }
-    ));
-    add_opt(llama_arg(
-        {"--log-append"},
-        "Log append",
-        [](gpt_params &) { log_param_single_parse("--log-append"); }
+        [](gpt_params &) {
+            gpt_log_pause(gpt_log_main());
+        }
     ));
     add_opt(llama_arg(
         {"--log-file"}, "FNAME",
-        "Log file",
-        [](gpt_params &, const std::string & value) { log_param_pair_parse(false, "--log-file", value); }
+        "Log to file",
+        [](gpt_params &, const std::string & value) {
+            gpt_log_set_file(gpt_log_main(), value.c_str());
+        }
     ));
 #endif // LOG_DISABLE_LOGS
 

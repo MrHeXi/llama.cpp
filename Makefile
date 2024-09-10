@@ -931,6 +931,7 @@ OBJ_LLAMA = \
 OBJ_COMMON = \
 	common/common.o \
 	common/arg.o \
+	common/log.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
@@ -1166,6 +1167,11 @@ common/common.o: \
 common/arg.o: \
 	common/arg.cpp \
 	common/arg.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/log.o: \
+	common/log.cpp \
+	common/log.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/sampling.o: \
