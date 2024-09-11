@@ -32,7 +32,7 @@ int main() {
         threads[i].join();
     }
 
-    gpt_log_pause(gpt_log_main());
+    gpt_log_free(gpt_log_main());
 
     return 0;
 }

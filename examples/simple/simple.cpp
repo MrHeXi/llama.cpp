@@ -13,7 +13,7 @@ static void print_usage(int, char ** argv) {
 
 int main(int argc, char ** argv) {
     llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        gpt_log_add(gpt_log_main(), level, 0, "%s", text);
+        gpt_log_add(gpt_log_main(), level, 0, text, NULL);
     }, NULL);
 
     gpt_params params;
@@ -71,12 +71,13 @@ int main(int argc, char ** argv) {
     const int n_ctx    = llama_n_ctx(ctx);
     const int n_kv_req = tokens_list.size() + (n_predict - tokens_list.size());
 
-    LOG("\n%s: n_predict = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_predict, n_ctx, n_kv_req);
+    LOG("\n");
+    LOG_INF("%s: n_predict = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_predict, n_ctx, n_kv_req);
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
-        LOG("%s: error: n_kv_req > n_ctx, the required KV cache size is not big enough\n", __func__);
-        LOG("%s:        either reduce n_predict or increase n_ctx\n", __func__);
+        LOG_ERR("%s: error: n_kv_req > n_ctx, the required KV cache size is not big enough\n", __func__);
+        LOG_ERR("%s:        either reduce n_predict or increase n_ctx\n", __func__);
         return 1;
     }
 
@@ -150,7 +151,7 @@ int main(int argc, char ** argv) {
 
     const auto t_main_end = ggml_time_us();
 
-    LOG("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
+    LOG_INF("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
     LOG("\n");

@@ -1,9 +1,11 @@
 #include "log.h"
 
-#include <thread>
-#include <mutex>
-#include <cstdio>
 #include <condition_variable>
+#include <cstdio>
+#include <mutex>
+#include <thread>
+
+int gpt_log_verbosity_env = getenv("LLAMA_LOG") ? atoi(getenv("LLAMA_LOG")) : LOG_DEFAULT_LLAMA;
 
 #define LOG_COLORS // TMP
 
@@ -36,7 +38,6 @@ static int64_t t_us() {
 struct gpt_log_entry {
     enum ggml_log_level level;
 
-    int verbosity;
     int64_t timestamp;
 
     std::vector<char> msg;
@@ -44,11 +45,26 @@ struct gpt_log_entry {
     // signals the worker thread to stop
     bool is_end;
 
-    void print(FILE * file) {
+    void print(FILE * file = nullptr) const {
+        FILE * fcur = file;
+        if (!fcur) {
+            // stderr displays DBG messages only when the verbosity is high
+            // these messages can still be logged to a file
+            if (level == GGML_LOG_LEVEL_DEBUG && gpt_log_verbosity_env < LOG_DEFAULT_DEBUG) {
+                return;
+            }
+
+            fcur = stdout;
+
+            if (level != GGML_LOG_LEVEL_NONE) {
+                fcur = stderr;
+            }
+        }
+
         if (level != GGML_LOG_LEVEL_NONE) {
             if (timestamp) {
                 // [M.s.ms.us]
-                fprintf(file, "[%04d.%02d.%03d.%03d] ",
+                fprintf(fcur, "" LOG_COL_BLUE "%05d.%02d.%03d.%03d" LOG_COL_DEFAULT " ",
                         (int) (timestamp / 1000000 / 60),
                         (int) (timestamp / 1000000 % 60),
                         (int) (timestamp / 1000 % 1000),
@@ -56,26 +72,22 @@ struct gpt_log_entry {
             }
 
             switch (level) {
-                case GGML_LOG_LEVEL_INFO:
-                    fprintf(file, LOG_COL_GREEN "INF " LOG_COL_DEFAULT);
-                    break;
-                case GGML_LOG_LEVEL_WARN:
-                    fprintf(file, LOG_COL_MAGENTA "WRN " LOG_COL_DEFAULT);
-                    break;
-                case GGML_LOG_LEVEL_ERROR:
-                    fprintf(file, LOG_COL_RED "ERR " LOG_COL_DEFAULT);
-                    break;
-                case GGML_LOG_LEVEL_DEBUG:
-                    fprintf(file, LOG_COL_YELLOW "DBG " LOG_COL_DEFAULT);
-                    break;
+                case GGML_LOG_LEVEL_INFO:  fprintf(fcur, LOG_COL_GREEN   "I " LOG_COL_DEFAULT); break;
+                case GGML_LOG_LEVEL_WARN:  fprintf(fcur, LOG_COL_MAGENTA "W "                ); break;
+                case GGML_LOG_LEVEL_ERROR: fprintf(fcur, LOG_COL_RED     "E "                ); break;
+                case GGML_LOG_LEVEL_DEBUG: fprintf(fcur, LOG_COL_YELLOW  "D "                ); break;
                 default:
                     break;
             }
         }
 
-        fprintf(file, "%s", msg.data());
+        fprintf(fcur, "%s", msg.data());
 
-        fflush(file);
+        if (level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_DEBUG) {
+            fprintf(fcur, LOG_COL_DEFAULT);
+        }
+
+        fflush(fcur);
     }
 };
 
@@ -120,7 +132,7 @@ private:
     gpt_log_entry cur;
 
 public:
-    void add(enum ggml_log_level level, int verbosity, const char * fmt, va_list args) {
+    void add(enum ggml_log_level level, const char * fmt, va_list args) {
         std::lock_guard<std::mutex> lock(mtx);
 
         if (!running) {
@@ -130,15 +142,34 @@ public:
         auto & entry = entries[tail];
 
         {
+#if 1
             const size_t n = vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args);
             if (n >= entry.msg.size()) {
                 entry.msg.resize(n + 1);
                 vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args);
             }
+#else
+            // hack for bolding arguments
+
+            std::stringstream ss;
+            for (int i = 0; fmt[i] != 0; i++) {
+                if (fmt[i] == '%') {
+                    ss << LOG_COL_BOLD;
+                    while (fmt[i] != ' ' && fmt[i] != ')' && fmt[i] != ']' && fmt[i] != 0) ss << fmt[i++];
+                    ss << LOG_COL_DEFAULT;
+                    if (fmt[i] == 0) break;
+                }
+                ss << fmt[i];
+            }
+            const size_t n = vsnprintf(entry.msg.data(), entry.msg.size(), ss.str().c_str(), args);
+            if (n >= entry.msg.size()) {
+                entry.msg.resize(n + 1);
+                vsnprintf(entry.msg.data(), entry.msg.size(), ss.str().c_str(), args);
+            }
+#endif
         }
 
         entry.level = level;
-        entry.verbosity = verbosity;
         entry.timestamp = 0;
         if (timestamps) {
             entry.timestamp = t_us() - t_start;
@@ -192,7 +223,7 @@ public:
                     break;
                 }
 
-                cur.print(stdout);
+                cur.print(); // stdout and stderr
 
                 if (file) {
                     cur.print(file);
@@ -267,10 +298,10 @@ void gpt_log_free(struct gpt_log * log) {
     delete log;
 }
 
-void gpt_log_add(struct gpt_log * log, enum ggml_log_level level, int verbosity, const char * fmt, ...) {
+void gpt_log_add(struct gpt_log * log, enum ggml_log_level level, const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    log->add(level, verbosity, fmt, args);
+    log->add(level, fmt, args);
     va_end(args);
 }
 

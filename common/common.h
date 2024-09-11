@@ -374,6 +374,9 @@ static std::vector<T> string_split(const std::string & str, char delim) {
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);
 
+std::string string_from_tokens(const struct llama_context * ctx, const std::vector<llama_token> & tokens);
+std::string string_from_batch (const struct llama_context * ctx, const struct llama_batch & batch);
+
 //
 // Filesystem utils
 //

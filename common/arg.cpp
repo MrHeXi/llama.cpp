@@ -1950,8 +1950,6 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else { std::invalid_argument("invalid value"); }
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
-#ifndef LOG_DISABLE_LOGS
-    // TODO: make this looks less weird
     add_opt(llama_arg(
         {"--log-disable"},
         "Log disable",
@@ -1966,7 +1964,6 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             gpt_log_set_file(gpt_log_main(), value.c_str());
         }
     ));
-#endif // LOG_DISABLE_LOGS
 
     return ctx_arg;
 }
