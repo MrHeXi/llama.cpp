@@ -126,7 +126,7 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     llama_chat_msg new_msg{role, content};
     auto formatted = llama_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
-    LOG("formatted: %s\n", formatted.c_str());
+    LOG_DBG("formatted: %s\n", formatted.c_str());
     return formatted;
 }
 
@@ -304,14 +304,14 @@ int main(int argc, char ** argv) {
         }
 
         LOG_DBG("prompt: \"%s\"\n", prompt.c_str());
-        LOG_DBG("tokens: %s\n", string_from_tokens(ctx, embd_inp).c_str());
+        LOG_DBG("tokens: %s\n", string_from(ctx, embd_inp).c_str());
     }
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
         if (add_bos) {
             embd_inp.push_back(llama_token_bos(model));
-            LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from_tokens(ctx, embd_inp).c_str());
+            LOG_WRN("embd_inp was considered empty and bos was added: %s\n", string_from(ctx, embd_inp).c_str());
         } else {
             LOG_ERR("input is empty\n");
             return -1;
@@ -584,7 +584,7 @@ int main(int argc, char ** argv) {
 
                     LOG_DBG("after swap: n_past = %d\n", n_past);
 
-                    LOG_DBG("embd: %s\n", string_from_tokens(ctx, embd).c_str());
+                    LOG_DBG("embd: %s\n", string_from(ctx, embd).c_str());
 
                     LOG_DBG("clear session path\n");
                     path_session.clear();
@@ -641,7 +641,7 @@ int main(int argc, char ** argv) {
                     n_eval = params.n_batch;
                 }
 
-                LOG_DBG("eval: %s\n", string_from_tokens(ctx, embd).c_str());
+                LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
 
                 if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
                     LOG_ERR("%s : failed to eval\n", __func__);
@@ -678,7 +678,7 @@ int main(int argc, char ** argv) {
 
             gpt_sampler_accept(smpl, id, /* apply_grammar= */ true);
 
-            // LOG_DBG("last: %s\n", string_from_tokens(ctx, smpl->prev.to_vector()).c_str());
+            // LOG_DBG("last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
             embd.push_back(id);
 
@@ -861,7 +861,7 @@ int main(int argc, char ** argv) {
                     const auto line_inp = ::llama_tokenize(ctx, user_inp,            false, format_chat);
                     const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true);
 
-                    LOG_DBG("input tokens: %s\n", string_from_tokens(ctx, line_inp).c_str());
+                    LOG_DBG("input tokens: %s\n", string_from(ctx, line_inp).c_str());
 
                     // if user stop generation mid-way, we must add EOT to finish model's last response
                     if (need_insert_eot && format_chat) {

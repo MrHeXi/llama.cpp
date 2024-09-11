@@ -442,7 +442,29 @@ void string_replace_all(std::string & s, const std::string & search, const std::
     s = std::move(builder);
 }
 
-std::string string_from_tokens(const struct llama_context * ctx, const std::vector<llama_token> & tokens) {
+std::string string_from(bool value) {
+    return value ? "true" : "false";
+}
+
+std::string string_from(const std::vector<int> & values) {
+    std::stringstream buf;
+
+    buf << "[ ";
+    bool first = true;
+    for (auto e : values) {
+        if (first) {
+            first = false;
+        } else {
+            buf << ", ";
+        }
+        buf << std::to_string(e);
+    }
+    buf << " ]";
+
+    return buf.str();
+}
+
+std::string string_from(const struct llama_context * ctx, const std::vector<llama_token> & tokens) {
     std::stringstream buf;
 
     buf << "[ ";
@@ -473,7 +495,7 @@ std::string string_from_tokens(const struct llama_context * ctx, const std::vect
     return buf.str();
 }
 
-std::string string_from_batch(const struct llama_context * ctx, const struct llama_batch & batch) {
+std::string string_from(const struct llama_context * ctx, const struct llama_batch & batch) {
     std::stringstream buf;
 
     buf << "[ ";
