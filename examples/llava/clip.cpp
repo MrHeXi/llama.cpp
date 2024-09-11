@@ -3,7 +3,6 @@
 // I'll gradually clean and extend it
 // Note: Even when using identical normalized image inputs (see normalize_image_u8_to_f32()) we have a significant difference in resulting embeddings compared to pytorch
 #include "clip.h"
-#include "log.h" // TODO: clip should not depend on common/log
 #include "ggml.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
@@ -39,6 +38,11 @@
 #include <sstream>
 #include <cinttypes>
 #include <limits>
+
+#define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
+#define LOG_DBG(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
 
 //#define CLIP_DEBUG_FUNCTIONS
 
