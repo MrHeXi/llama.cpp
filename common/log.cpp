@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -100,6 +101,9 @@ struct gpt_log {
         running = false;
         t_start = t_us();
         entries.resize(capacity);
+        for (auto & entry : entries) {
+            entry.msg.resize(256);
+        }
         head = 0;
         tail = 0;
 
@@ -144,11 +148,15 @@ public:
         auto & entry = entries[tail];
 
         {
+            // cannot use args twice, so make a copy in case we need to expand the buffer
+            va_list args_copy;
+            va_copy(args_copy, args);
+
 #if 1
             const size_t n = vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args);
             if (n >= entry.msg.size()) {
                 entry.msg.resize(n + 1);
-                vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args);
+                vsnprintf(entry.msg.data(), entry.msg.size(), fmt, args_copy);
             }
 #else
             // hack for bolding arguments
@@ -166,7 +174,7 @@ public:
             const size_t n = vsnprintf(entry.msg.data(), entry.msg.size(), ss.str().c_str(), args);
             if (n >= entry.msg.size()) {
                 entry.msg.resize(n + 1);
-                vsnprintf(entry.msg.data(), entry.msg.size(), ss.str().c_str(), args);
+                vsnprintf(entry.msg.data(), entry.msg.size(), ss.str().c_str(), args_copy);
             }
 #endif
         }
@@ -194,6 +202,10 @@ public:
 
             head = 0;
             tail = new_tail;
+
+            for (size_t i = tail; i < new_entries.size(); i++) {
+                new_entries[i].msg.resize(256);
+            }
 
             entries = std::move(new_entries);
         }
@@ -280,7 +292,7 @@ public:
 };
 
 struct gpt_log * gpt_log_init() {
-    return new gpt_log{1024};
+    return new gpt_log{256};
 }
 
 struct gpt_log * gpt_log_main() {
