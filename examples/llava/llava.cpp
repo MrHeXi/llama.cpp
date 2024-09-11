@@ -7,10 +7,13 @@
 
 #include "llama.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
-#include <vector>
+#include <cstring>
+#include <limits>
 #include <numeric>
+#include <vector>
 
 // RGB uint8 image
 struct clip_image_u8 {

@@ -3,6 +3,7 @@
 #include "llama.h"
 
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <vector>

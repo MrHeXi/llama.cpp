@@ -1,9 +1,11 @@
 #include "log.h"
 
 #include <condition_variable>
+#include <cstdarg>
 #include <cstdio>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 int gpt_log_verbosity_env = getenv("LLAMA_LOG") ? atoi(getenv("LLAMA_LOG")) : LOG_DEFAULT_LLAMA;
 
@@ -84,7 +86,7 @@ struct gpt_log_entry {
         fprintf(fcur, "%s", msg.data());
 
         if (level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_DEBUG) {
-            fprintf(fcur, LOG_COL_DEFAULT);
+            fprintf(fcur, "%s", LOG_COL_DEFAULT);
         }
 
         fflush(fcur);

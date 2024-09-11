@@ -1,5 +1,6 @@
 #include "log.h"
 
+#include <cstdlib>
 #include <thread>
 
 int main() {

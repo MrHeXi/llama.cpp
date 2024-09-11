@@ -7,8 +7,10 @@
 #include "llama.h"
 #include "ggml.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 #include <iostream> // TODO: remove me
 
