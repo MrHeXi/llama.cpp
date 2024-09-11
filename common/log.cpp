@@ -296,7 +296,17 @@ struct gpt_log * gpt_log_init() {
 }
 
 struct gpt_log * gpt_log_main() {
-    static struct gpt_log * log = gpt_log_init();
+    // this is supposed to be thread-safe but sanitizer complains
+    // https://github.com/ggerganov/llama.cpp/actions/runs/10815973423/job/30006101803?pr=9418#step:6:3731
+    //static struct gpt_log * log = gpt_log_init();
+
+    // let's try this instead
+    static struct gpt_log * log = nullptr;
+    static std::once_flag flag;
+    std::call_once(flag, []() {
+        log = gpt_log_init();
+    });
+
     return log;
 }
 

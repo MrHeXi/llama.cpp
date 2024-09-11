@@ -9,7 +9,7 @@ int main() {
 
     std::thread threads[n_thread];
     for (int i = 0; i < n_thread; i++) {
-        threads[i] = std::thread([i]() {
+        threads[i] = std::thread([i, n_msg]() {
             for (int j = 0; j < n_msg; j++) {
                 const int log_type = std::rand() % 4;
 
