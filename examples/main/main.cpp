@@ -126,11 +126,13 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     llama_chat_msg new_msg{role, content};
     auto formatted = llama_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
-    LOG_DBG("formatted: %s\n", formatted.c_str());
+    LOG_DBG("formatted: '%s'\n", formatted.c_str());
     return formatted;
 }
 
 int main(int argc, char ** argv) {
+    gpt_init();
+
     llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
         if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
             gpt_log_add(gpt_log_main(), level, "%s", text);
@@ -178,8 +180,6 @@ int main(int argc, char ** argv) {
     if (params.rope_freq_scale != 0.0) {
         LOG_WRN("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
-
-    print_build_info();
 
     LOG_INF("%s: llama backend init\n", __func__);
 

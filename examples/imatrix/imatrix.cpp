@@ -543,7 +543,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
 
         if (params.compute_ppl) {
             const int first = n_ctx/2;
-            const auto all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
+            const auto * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
             process_logits(n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
                     workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
             count += n_ctx - first - 1;
@@ -573,11 +573,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-    llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
-        }
-    }, NULL);
+    gpt_init();
 
     gpt_params params;
 

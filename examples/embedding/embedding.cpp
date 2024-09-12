@@ -79,11 +79,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 }
 
 int main(int argc, char ** argv) {
-    llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
-        }
-    }, NULL);
+    gpt_log_init();
 
     gpt_params params;
 
@@ -94,8 +90,6 @@ int main(int argc, char ** argv) {
     params.embedding = true;
     // For non-causal models, batch size must be equal to ubatch size
     params.n_ubatch = params.n_batch;
-
-    print_build_info();
 
     llama_backend_init();
     llama_numa_init(params.numa);

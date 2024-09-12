@@ -37,11 +37,7 @@ struct ngram_container {
 };
 
 int main(int argc, char ** argv) {
-    llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
-        }
-    }, NULL);
+    gpt_init();
 
     gpt_params params;
 

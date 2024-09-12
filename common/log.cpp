@@ -67,7 +67,7 @@ struct gpt_log_entry {
         if (level != GGML_LOG_LEVEL_NONE) {
             if (timestamp) {
                 // [M.s.ms.us]
-                fprintf(fcur, "" LOG_COL_BLUE "%05d.%02d.%03d.%03d" LOG_COL_DEFAULT " ",
+                fprintf(fcur, "" LOG_COL_BLUE "%d.%02d.%03d.%03d" LOG_COL_DEFAULT " ",
                         (int) (timestamp / 1000000 / 60),
                         (int) (timestamp / 1000000 % 60),
                         (int) (timestamp / 1000 % 1000),

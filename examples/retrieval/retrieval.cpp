@@ -112,11 +112,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 }
 
 int main(int argc, char ** argv) {
-    llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
-        }
-    }, NULL);
+    gpt_init();
 
     gpt_params params;
 
@@ -136,8 +132,6 @@ int main(int argc, char ** argv) {
         LOG_ERR("context_files must be specified\n");
         return 1;
     }
-
-    print_build_info();
 
     LOG_INF("processing files:\n");
     for (auto & context_file : params.context_files) {

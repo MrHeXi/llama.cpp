@@ -85,7 +85,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
     }
 
     const auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true);
-    LOG_DBG("formatted_chat: %s\n", formatted_chat.c_str());
+    LOG_DBG("formatted_chat: '%s'\n", formatted_chat.c_str());
 
     return formatted_chat;
 }
@@ -295,7 +295,8 @@ static json probs_vector_to_json(const llama_context * ctx, const std::vector<co
 static bool server_sent_event(httplib::DataSink & sink, const char * event, const json & data) {
     const std::string str =
         std::string(event) + ": " +
-        data.dump(-1, ' ', false, json::error_handler_t::replace) + "\n\n";
+        data.dump(-1, ' ', false, json::error_handler_t::replace) +
+        "\n\n"; // note: these newlines are important (not sure why though, if you know, add a comment to explain)
 
     LOG_DBG("data stream, to_send: %s", str.c_str());
 

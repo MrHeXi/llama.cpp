@@ -339,6 +339,9 @@ struct gpt_params {
     bool batched_bench_output_jsonl = false;
 };
 
+// call once at the start of a program using common
+void gpt_init();
+
 std::string gpt_params_get_system_info(const gpt_params & params);
 
 bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);

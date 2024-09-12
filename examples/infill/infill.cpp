@@ -104,11 +104,7 @@ static void sigint_handler(int signo) {
 #endif
 
 int main(int argc, char ** argv) {
-    llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
-            gpt_log_add(gpt_log_main(), level, "%s", text);
-        }
-    }, NULL);
+    gpt_init();
 
     gpt_params params;
     g_params = &params;
@@ -158,8 +154,6 @@ int main(int argc, char ** argv) {
     if (params.rope_freq_scale != 0.0) {
         LOG_WRN("%s: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
-
-    print_build_info();
 
     LOG_INF("%s: llama backend init\n", __func__);
     llama_backend_init();
