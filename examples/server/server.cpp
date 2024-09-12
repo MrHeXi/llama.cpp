@@ -1905,7 +1905,7 @@ struct server_context {
 
                     // we haven't tokenized the prompt yet - do it now:
                     if (prompt_tokens.empty()) {
-                        SRV_DBG("tokenizing prompt, id_slot = %d, id_task = %d\n", slot.id, slot.id_task);
+                        SRV_INF("tokenizing prompt, id_slot = %d, id_task = %d\n", slot.id, slot.id_task);
 
                         slot.t_start_process_prompt = ggml_time_us();
                         slot.t_start_generation = 0;
@@ -1949,7 +1949,7 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
-                        SRV_INF("prompt tokenized, id_slot = %d, id_task = %d, n_ctx = %d, n_keep = %d, n_prompt_tokens = %d\n", slot.id, slot.id_task, slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
+                        SRV_INF("prompt tokenized, id_slot = %d, id_task = %d, n_ctx_slot = %d, n_keep = %d, n_prompt_tokens = %d\n", slot.id, slot.id_task, slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
 
                         // empty prompt passed -> release the slot and send empty response
                         if (prompt_tokens.empty()) {
@@ -2105,7 +2105,7 @@ struct server_context {
                     //    {"n_tokens", batch.n_tokens},
                     //    {"progress", (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens},
                     //});
-                    SRV_DBG("prompt processing progress, id_slot = %d, n_past = %d, n_ctx = %d, n_tokens = %d, progress = %f\n", slot.id, slot.n_past, n_ctx, batch.n_tokens, (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens);
+                    SRV_INF("prompt processing progress, id_slot = %d, n_past = %d, n_tokens = %d, progress = %f\n", slot.id, slot.n_past, batch.n_tokens, (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens);
 
                     // entire prompt has been processed
                     if (slot.n_past == slot.n_prompt_tokens) {
@@ -2125,7 +2125,7 @@ struct server_context {
                         //    {"n_ctx",    n_ctx},
                         //    {"n_tokens", batch.n_tokens},
                         //});
-                        SRV_DBG("prompt done, id_slot = %d, n_past = %d, n_ctx = %d, n_tokens = %d\n", slot.id, slot.n_past, n_ctx, batch.n_tokens);
+                        SRV_INF("prompt done, id_slot = %d, n_past = %d, n_tokens = %d\n", slot.id, slot.n_past, batch.n_tokens);
                     }
                 }
 

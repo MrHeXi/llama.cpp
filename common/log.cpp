@@ -8,11 +8,12 @@
 #include <thread>
 #include <vector>
 
-int gpt_log_verbosity_env = getenv("LLAMA_LOG") ? atoi(getenv("LLAMA_LOG")) : LOG_DEFAULT_LLAMA;
+int gpt_log_verbosity_thold = LOG_DEFAULT_LLAMA;
 
-#define LOG_COLORS // TMP
+void gpt_log_set_verbosity_thold(int verbosity) {
+    gpt_log_verbosity_thold = verbosity;
+}
 
-#ifdef LOG_COLORS
 #define LOG_COL_DEFAULT "\033[0m"
 #define LOG_COL_BOLD    "\033[1m"
 #define LOG_COL_RED     "\033[31m"
@@ -22,21 +23,36 @@ int gpt_log_verbosity_env = getenv("LLAMA_LOG") ? atoi(getenv("LLAMA_LOG")) : LO
 #define LOG_COL_MAGENTA "\033[35m"
 #define LOG_COL_CYAN    "\033[36m"
 #define LOG_COL_WHITE   "\033[37m"
-#else
-#define LOG_COL_DEFAULT ""
-#define LOG_COL_BOLD    ""
-#define LOG_COL_RED     ""
-#define LOG_COL_GREEN   ""
-#define LOG_COL_YELLOW  ""
-#define LOG_COL_BLUE    ""
-#define LOG_COL_MAGENTA ""
-#define LOG_COL_CYAN    ""
-#define LOG_COL_WHITE   ""
-#endif
 
 static int64_t t_us() {
     return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
+
+// colors
+enum gpt_log_col : int {
+    GPT_LOG_COL_DEFAULT = 0,
+    GPT_LOG_COL_BOLD,
+    GPT_LOG_COL_RED,
+    GPT_LOG_COL_GREEN,
+    GPT_LOG_COL_YELLOW,
+    GPT_LOG_COL_BLUE,
+    GPT_LOG_COL_MAGENTA,
+    GPT_LOG_COL_CYAN,
+    GPT_LOG_COL_WHITE,
+};
+
+// disable colors by default
+static std::vector<const char *> g_col = {
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+};
 
 struct gpt_log_entry {
     enum ggml_log_level level;
@@ -53,7 +69,7 @@ struct gpt_log_entry {
         if (!fcur) {
             // stderr displays DBG messages only when the verbosity is high
             // these messages can still be logged to a file
-            if (level == GGML_LOG_LEVEL_DEBUG && gpt_log_verbosity_env < LOG_DEFAULT_DEBUG) {
+            if (level == GGML_LOG_LEVEL_DEBUG && gpt_log_verbosity_thold < LOG_DEFAULT_DEBUG) {
                 return;
             }
 
@@ -67,18 +83,20 @@ struct gpt_log_entry {
         if (level != GGML_LOG_LEVEL_NONE) {
             if (timestamp) {
                 // [M.s.ms.us]
-                fprintf(fcur, "" LOG_COL_BLUE "%d.%02d.%03d.%03d" LOG_COL_DEFAULT " ",
+                fprintf(fcur, "%s%d.%02d.%03d.%03d%s ",
+                        g_col[GPT_LOG_COL_BLUE],
                         (int) (timestamp / 1000000 / 60),
                         (int) (timestamp / 1000000 % 60),
                         (int) (timestamp / 1000 % 1000),
-                        (int) (timestamp % 1000));
+                        (int) (timestamp % 1000),
+                        g_col[GPT_LOG_COL_DEFAULT]);
             }
 
             switch (level) {
-                case GGML_LOG_LEVEL_INFO:  fprintf(fcur, LOG_COL_GREEN   "I " LOG_COL_DEFAULT); break;
-                case GGML_LOG_LEVEL_WARN:  fprintf(fcur, LOG_COL_MAGENTA "W "                ); break;
-                case GGML_LOG_LEVEL_ERROR: fprintf(fcur, LOG_COL_RED     "E "                ); break;
-                case GGML_LOG_LEVEL_DEBUG: fprintf(fcur, LOG_COL_YELLOW  "D "                ); break;
+                case GGML_LOG_LEVEL_INFO:  fprintf(fcur, "%sI %s", g_col[GPT_LOG_COL_GREEN],   g_col[GPT_LOG_COL_DEFAULT]); break;
+                case GGML_LOG_LEVEL_WARN:  fprintf(fcur, "%sW %s", g_col[GPT_LOG_COL_MAGENTA], ""                        ); break;
+                case GGML_LOG_LEVEL_ERROR: fprintf(fcur, "%sE %s", g_col[GPT_LOG_COL_RED],     ""                        ); break;
+                case GGML_LOG_LEVEL_DEBUG: fprintf(fcur, "%sD %s", g_col[GPT_LOG_COL_YELLOW],  ""                        ); break;
                 default:
                     break;
             }
@@ -87,7 +105,7 @@ struct gpt_log_entry {
         fprintf(fcur, "%s", msg.data());
 
         if (level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR || level == GGML_LOG_LEVEL_DEBUG) {
-            fprintf(fcur, "%s", LOG_COL_DEFAULT);
+            fprintf(fcur, "%s", g_col[GPT_LOG_COL_DEFAULT]);
         }
 
         fflush(fcur);
@@ -97,7 +115,7 @@ struct gpt_log_entry {
 struct gpt_log {
     gpt_log(size_t capacity) {
         file = nullptr;
-        timestamps = true;
+        timestamps = false;
         running = false;
         t_start = t_us();
         entries.resize(capacity);
@@ -284,6 +302,28 @@ public:
         resume();
     }
 
+    void set_colors(bool colors) {
+        pause();
+
+        if (colors) {
+            g_col[GPT_LOG_COL_DEFAULT] = LOG_COL_DEFAULT;
+            g_col[GPT_LOG_COL_BOLD]    = LOG_COL_BOLD;
+            g_col[GPT_LOG_COL_RED]     = LOG_COL_RED;
+            g_col[GPT_LOG_COL_GREEN]   = LOG_COL_GREEN;
+            g_col[GPT_LOG_COL_YELLOW]  = LOG_COL_YELLOW;
+            g_col[GPT_LOG_COL_BLUE]    = LOG_COL_BLUE;
+            g_col[GPT_LOG_COL_MAGENTA] = LOG_COL_MAGENTA;
+            g_col[GPT_LOG_COL_CYAN]    = LOG_COL_CYAN;
+            g_col[GPT_LOG_COL_WHITE]   = LOG_COL_WHITE;
+        } else {
+            for (size_t i = 0; i < g_col.size(); i++) {
+                g_col[i] = "";
+            }
+        }
+
+        resume();
+    }
+
     void set_timestamps(bool timestamps) {
         std::lock_guard<std::mutex> lock(mtx);
 
@@ -322,6 +362,10 @@ void gpt_log_add(struct gpt_log * log, enum ggml_log_level level, const char * f
 
 void gpt_log_set_file(struct gpt_log * log, const char * file) {
     log->set_file(file);
+}
+
+void gpt_log_set_colors(struct gpt_log * log, bool colors) {
+    log->set_colors(colors);
 }
 
 void gpt_log_set_timestamps(struct gpt_log * log, bool timestamps) {

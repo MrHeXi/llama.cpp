@@ -1951,6 +1951,34 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             gpt_log_set_file(gpt_log_main(), value.c_str());
         }
     ));
+    add_opt(llama_arg(
+        {"--log-colors"},
+        "Enable colored logging",
+        [](gpt_params &) {
+            gpt_log_set_colors(gpt_log_main(), true);
+        }
+    ).set_env("LLAMA_LOG_COLORS"));
+    add_opt(llama_arg(
+        {"-lv", "--log-verbose"},
+        "Set verbosity level to infinity (i.e. log all messages, useful for debugging)",
+        [](gpt_params &) {
+            gpt_log_set_verbosity_thold(INT_MAX);
+        }
+    ));
+    add_opt(llama_arg(
+        {"--log-verbosity"}, "THOLD",
+        "Set the verbosity threshold. Messages with a lower verbosity will be ignored.",
+        [](gpt_params &, int value) {
+            gpt_log_set_verbosity_thold(value);
+        }
+    ).set_env("LLAMA_LOG_VERBOSITY"));
+    add_opt(llama_arg(
+        {"--log-timestamps"},
+        "Enable timestamps in log messages",
+        [](gpt_params &) {
+            gpt_log_set_timestamps(gpt_log_main(), true);
+        }
+    ).set_env("LLAMA_LOG_TIMESTAMPS"));
 
     return ctx_arg;
 }

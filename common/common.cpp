@@ -364,7 +364,7 @@ bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_MAX_N_THREAD
 
 void gpt_init() {
     llama_log_set([](ggml_log_level level, const char * text, void * /*user_data*/) {
-        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_env) {
+        if (LOG_DEFAULT_LLAMA <= gpt_log_verbosity_thold) {
             gpt_log_add(gpt_log_main(), level, "%s", text);
         }
     }, NULL);
