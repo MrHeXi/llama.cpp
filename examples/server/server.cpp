@@ -34,18 +34,16 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
-#include <mutex>
-#include <thread>
-#include <signal.h>
-#include <memory>
-#include <unordered_set>
-#include <unordered_map>
+#include <cinttypes>
 #include <deque>
+#include <memory>
+#include <mutex>
+#include <signal.h>
+#include <thread>
+#include <unordered_map>
+#include <unordered_set>
 
 using json = nlohmann::ordered_json;
-
-bool server_verbose = false;
-bool server_log_json = true;
 
 enum stop_type {
     STOP_TYPE_FULL,
@@ -245,12 +243,7 @@ struct server_slot {
         if (is_processing()) {
             t_token_generation = (ggml_time_us() - t_start_generation) / 1e3;
             state = SLOT_STATE_IDLE;
-            LOG_INFO("slot released", {
-                {"id_slot",   id},
-                {"id_task",   id_task},
-                {"n_past",    n_past},
-                {"truncated", truncated},
-            });
+            LOG_INF("slot released : id_slot = %d, id_task = %d, n_past = %d, truncated = %d\n", id, id_task, n_past, truncated);
             callback_on_release(id);
         }
     }
@@ -300,21 +293,21 @@ struct server_slot {
     void print_timings() const {
         char buffer[512];
 
-        double t_token = t_prompt_processing / n_prompt_tokens_processed;
+        double t_token         =       t_prompt_processing / n_prompt_tokens_processed;
         double n_tokens_second = 1e3 / t_prompt_processing * n_prompt_tokens_processed;
 
         snprintf(buffer, 512, "prompt eval time     = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)",
                 t_prompt_processing, n_prompt_tokens_processed,
                 t_token, n_tokens_second);
 
-        LOG_INFO(buffer, {
-            {"id_slot",                   id},
-            {"id_task",                   id_task},
-            {"t_prompt_processing",       t_prompt_processing},
-            {"n_prompt_tokens_processed", n_prompt_tokens_processed},
-            {"t_token",                   t_token},
-            {"n_tokens_second",           n_tokens_second},
-        });
+        //LOG_INFO(buffer, {
+        //    {"id_slot",                   id},
+        //    {"id_task",                   id_task},
+        //    {"t_prompt_processing",       t_prompt_processing},
+        //    {"n_prompt_tokens_processed", n_prompt_tokens_processed},
+        //    {"t_token",                   t_token},
+        //    {"n_tokens_second",           n_tokens_second},
+        //});
 
         t_token = t_token_generation / n_decoded;
         n_tokens_second = 1e3 / t_token_generation * n_decoded;
@@ -323,24 +316,24 @@ struct server_slot {
                 t_token_generation, n_decoded,
                 t_token, n_tokens_second);
 
-        LOG_INFO(buffer, {
-            {"id_slot",            id},
-            {"id_task",            id_task},
-            {"t_token_generation", t_token_generation},
-            {"n_decoded",          n_decoded},
-            {"t_token",            t_token},
-            {"n_tokens_second",    n_tokens_second},
-        });
+        //LOG_INFO(buffer, {
+        //    {"id_slot",            id},
+        //    {"id_task",            id_task},
+        //    {"t_token_generation", t_token_generation},
+        //    {"n_decoded",          n_decoded},
+        //    {"t_token",            t_token},
+        //    {"n_tokens_second",    n_tokens_second},
+        //});
 
         snprintf(buffer, 512, "          total time = %10.2f ms", t_prompt_processing + t_token_generation);
 
-        LOG_INFO(buffer, {
-            {"id_slot",             id},
-            {"id_task",             id_task},
-            {"t_prompt_processing", t_prompt_processing},
-            {"t_token_generation",  t_token_generation},
-            {"t_total",             t_prompt_processing + t_token_generation},
-        });
+        //LOG_INFO(buffer, {
+        //    {"id_slot",             id},
+        //    {"id_task",             id_task},
+        //    {"t_prompt_processing", t_prompt_processing},
+        //    {"t_token_generation",  t_token_generation},
+        //    {"t_total",             t_prompt_processing + t_token_generation},
+        //});
     }
 };
 
@@ -416,7 +409,7 @@ struct server_queue {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         if (task.id == -1) {
             task.id = id++;
-            LOG_VERBOSE("new task id", {{"new_id", task.id}});
+            LOG_DBG("%s: new task, id = %d\n", __func__, task.id);
         }
         if (front) {
             queue_tasks.push_front(std::move(task));
@@ -433,7 +426,7 @@ struct server_queue {
         for (auto & task : tasks) {
             if (task.id == -1) {
                 task.id = id++;
-                LOG_VERBOSE("new task id", {{"new_id", task.id}});
+                LOG_DBG("%s: new multi-task, id = %d\n", __func__, task.id);
             }
             if (front) {
                 queue_tasks.push_front(std::move(task));
@@ -456,7 +449,7 @@ struct server_queue {
     int get_new_id() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         int new_id = id++;
-        LOG_VERBOSE("new task id", {{"new_id", new_id}});
+        LOG_DBG("%s: new id = %d\n", __func__, new_id);
         return new_id;
     }
 
@@ -498,7 +491,7 @@ struct server_queue {
         running = true;
 
         while (true) {
-            LOG_VERBOSE("new task may arrive", {});
+            LOG_DBG("%s: processing new tasks\n", __func__);
 
             while (true) {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
@@ -509,21 +502,22 @@ struct server_queue {
                 server_task task = queue_tasks.front();
                 queue_tasks.pop_front();
                 lock.unlock();
-                LOG_VERBOSE("callback_new_task", {{"id_task", task.id}});
+
+                LOG_DBG("%s: processing task, id = %d\n", __func__, task.id);
                 callback_new_task(task);
             }
 
             // all tasks in the current loop is processed, slots data is now ready
-            LOG_VERBOSE("callback_update_slots", {});
+            LOG_DBG("%s: update slots\n", __func__);
 
             callback_update_slots();
 
-            LOG_VERBOSE("wait for new task", {});
+            LOG_DBG("%s: waiting for new tasks\n", __func__);
             {
                 std::unique_lock<std::mutex> lock(mutex_tasks);
                 if (queue_tasks.empty()) {
                     if (!running) {
-                        LOG_VERBOSE("ending start_loop", {});
+                        LOG_DBG("%s: terminate\n", __func__);
                         return;
                     }
                     condition_tasks.wait(lock, [&]{
@@ -547,7 +541,7 @@ struct server_response {
 
     // add the id_task to the list of tasks waiting for response
     void add_waiting_task_id(int id_task) {
-        LOG_VERBOSE("waiting for task id", {{"id_task", id_task}});
+        LOG_DBG("%s: waiting for task id = %d\n", __func__, id_task);
 
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.insert(id_task);
@@ -561,7 +555,7 @@ struct server_response {
 
     // when the request is finished, we can remove task associated with it
     void remove_waiting_task_id(int id_task) {
-        LOG_VERBOSE("remove waiting for task id", {{"id_task", id_task}});
+        LOG_DBG("%s: task id = %d is done\n", __func__, id_task);
 
         std::unique_lock<std::mutex> lock(mutex_results);
         waiting_task_ids.erase(id_task);
@@ -595,12 +589,13 @@ struct server_response {
 
     // Send a new result to a waiting id_task
     void send(server_task_result & result) {
-        LOG_VERBOSE("send new result", {{"id_task", result.id}});
+        LOG_DBG("%s: sending result for task id = %d\n", __func__, result.id);
 
         std::unique_lock<std::mutex> lock(mutex_results);
         for (const auto & id_task : waiting_task_ids) {
             if (result.id == id_task) {
-                LOG_VERBOSE("queue_results.push_back", {{"id_task", id_task}});
+                LOG_DBG("%s: task id = %d moved to result queue\n", __func__, result.id);
+
                 queue_results.push_back(std::move(result));
                 condition_results.notify_all();
                 return;
@@ -612,7 +607,7 @@ struct server_response {
 struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
-    std::vector<llama_lora_adapter_container> lora_adapters;
+    std::vector<llama_lora_adapter_container> loras;
 
     gpt_params params;
 
@@ -672,11 +667,13 @@ struct server_context {
         llama_init_result llama_init = llama_init_from_gpt_params(params);
 
         model = llama_init.model;
-        ctx = llama_init.context;
-        lora_adapters = llama_init.lora_adapters;
+        ctx   = llama_init.context;
+        loras = llama_init.lora_adapters;
+
         params.n_parallel -= 1; // but be sneaky about it
+
         if (model == nullptr) {
-            LOG_ERROR("unable to load model", {{"model", params.model}});
+            LOG_ERR("%s: failed to load model, '%s'\n", __func__, params.model.c_str());
             return false;
         }
 
@@ -699,7 +696,7 @@ struct server_context {
     void init() {
         const int32_t n_ctx_slot = n_ctx / params.n_parallel;
 
-        LOG_INFO("initializing slots", {{"n_slots", params.n_parallel}});
+        LOG_INF("%s: initializing slots, n_slots = %d\n", __func__, params.n_parallel);
 
         for (int i = 0; i < params.n_parallel; i++) {
             server_slot slot;
@@ -708,10 +705,7 @@ struct server_context {
             slot.n_ctx = n_ctx_slot;
             slot.n_predict = params.n_predict;
 
-            LOG_INFO("new slot", {
-                {"id_slot",    slot.id},
-                {"n_ctx_slot", slot.n_ctx}
-            });
+            LOG_INF("%s: new slot, id_slot = %d, n_ctx_slot = %d\n", __func__, slot.id, slot.n_ctx);
 
             const int ga_n = params.grp_attn_n;
             const int ga_w = params.grp_attn_w;
@@ -722,11 +716,7 @@ struct server_context {
                 //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of ga_w");    // NOLINT
                 //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * ga_n"); // NOLINT
 
-                LOG_INFO("slot self-extend", {
-                    {"id_slot", slot.id},
-                    {"ga_n",    ga_n},
-                    {"ga_w",    ga_w}
-                });
+                LOG_INF("slot self-extend: id_slot = %d, ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
             }
 
             slot.ga_i = 0;
@@ -849,11 +839,7 @@ struct server_context {
             }
 
             if (ret != nullptr) {
-                LOG_VERBOSE("selected slot by lcp similarity", {
-                    {"id_slot", ret->id},
-                    {"max_lcp_len", max_lcp_len},
-                    {"similarity", similarity},
-                });
+                LOG_DBG("%s: selected slot by lcp similarity, id_slot = %d, max_lcp_len = %d, similarity = %f\n", __func__, ret->id, max_lcp_len, similarity);
             }
         }
 
@@ -874,10 +860,7 @@ struct server_context {
             }
 
             if (ret != nullptr) {
-                LOG_VERBOSE("selected slot by lru", {
-                    {"id_slot", ret->id},
-                    {"t_last", t_last},
-                });
+                LOG_DBG("%s: selected slot by lru, id_slot = %d, t_last = %" PRId64 "\n", __func__, ret->id, t_last);
             }
         }
 
@@ -941,17 +924,14 @@ struct server_context {
         }
 
         if (slot.params.cache_prompt && slot.ga_n != 1) {
-            LOG_WARNING("cache_prompt is not supported with group-attention", {});
             slot.params.cache_prompt = false;
+            LOG_WRN("%s: slot %d: group-attention is not supported with prompt caching. disabling cache", __func__, slot.id);
         }
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
-            LOG_WARNING("Max tokens to predict exceeds server configuration", {
-                {"params.n_predict", slot.params.n_predict},
-                {"slot.n_predict",   slot.n_predict},
-            });
             slot.params.n_predict = slot.n_predict;
+            LOG_WRN("%s: slot %d: n_predict exceeds server configuration, setting to %d", __func__, slot.id, slot.n_predict);
         }
 
         // infill
@@ -1060,16 +1040,13 @@ struct server_context {
         slot.state = SLOT_STATE_PROCESSING_PROMPT;
         slot.prompt_tokens.clear();
 
-        LOG_INFO("slot is processing task", {
-            {"id_slot", slot.id},
-            {"id_task", slot.id_task},
-        });
+        LOG_INF("%s: slot %d is processing task, id_task = %d\n", __func__, slot.id, slot.id_task);
 
         return true;
     }
 
     void kv_cache_clear() {
-        LOG_VERBOSE("clearing KV cache", {});
+        LOG_DBG("%s: clearing KV cache\n", __func__);
 
         // clear the entire KV cache
         llama_kv_cache_clear(ctx);
@@ -1077,9 +1054,7 @@ struct server_context {
     }
 
     void system_prompt_update() {
-        LOG_VERBOSE("system prompt update", {
-            {"system_prompt", system_prompt},
-        });
+        LOG_DBG("%s: updating system prompt: %s\n", __func__, system_prompt.c_str());
 
         kv_cache_clear();
         system_tokens.clear();
@@ -1100,7 +1075,7 @@ struct server_context {
                 }
 
                 if (llama_decode(ctx, batch) != 0) {
-                    LOG_ERROR("llama_decode() failed", {});
+                    LOG_ERR("%s: llama_decode() failed\n", __func__);
                     return;
                 }
             }
@@ -1115,11 +1090,9 @@ struct server_context {
     }
 
     bool system_prompt_set(const std::string & sys_prompt) {
-        system_prompt = sys_prompt;
+        LOG_DBG("%s: system prompt set: %s\n", __func__, system_prompt.c_str());
 
-        LOG_VERBOSE("system prompt process", {
-            {"system_prompt",  system_prompt},
-        });
+        system_prompt = sys_prompt;
 
         // release all slots
         for (server_slot & slot : slots) {
@@ -1202,55 +1175,54 @@ struct server_context {
             slot.stopped_limit  = true;
             slot.has_next_token = false;
 
-            LOG_VERBOSE("stopped by limit", {
-                {"id_slot",   slot.id},
-                {"id_task",   slot.id_task},
-                {"n_decoded", slot.n_decoded},
-                {"n_predict", slot.params.n_predict},
-            });
+            LOG_DBG("%s: slot %d, task %d: stopped by limit, n_decoded = %d, n_predict = %d\n", __func__, slot.id, slot.id_task, slot.n_decoded, slot.params.n_predict);
         }
 
         if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
-            LOG_VERBOSE("eos token found", {});
+            LOG_DBG("%s: slot %d, task %d: stopped by EOS\n", __func__, slot.id, slot.id_task);
         }
 
-        auto n_ctx_train = llama_n_ctx_train(model);
-        if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1
-                    && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
-            LOG_WARNING("n_predict is not set and self-context extend is disabled."
-                        " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
-                    { "id_slot",              slot.id },
-                    { "params.n_predict",     slot.params.n_predict },
-                    { "slot.n_prompt_tokens", slot.n_prompt_tokens },
-                    { "slot.n_decoded",       slot.n_decoded },
-                    { "slot.n_predict",       slot.n_predict },
-                    { "n_slots",              params.n_parallel },
-                    { "slot.n_ctx",           slot.n_ctx },
-                    { "n_ctx",                n_ctx },
-                    { "n_ctx_train",          n_ctx_train },
-                    { "ga_n",                 slot.ga_n },
-                });
+        const auto n_ctx_train = llama_n_ctx_train(model);
+
+        if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1 && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
+            //LOG_WARNING("n_predict is not set and self-context extend is disabled."
+            //            " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
+            //        { "id_slot",              slot.id },
+            //        { "params.n_predict",     slot.params.n_predict },
+            //        { "slot.n_prompt_tokens", slot.n_prompt_tokens },
+            //        { "slot.n_decoded",       slot.n_decoded },
+            //        { "slot.n_predict",       slot.n_predict },
+            //        { "n_slots",              params.n_parallel },
+            //        { "slot.n_ctx",           slot.n_ctx },
+            //        { "n_ctx",                n_ctx },
+            //        { "n_ctx_train",          n_ctx_train },
+            //        { "ga_n",                 slot.ga_n },
+            //    });
             slot.truncated      = true;
             slot.stopped_limit  = true;
             slot.has_next_token = false; // stop prediction
+
+            LOG_WRN("%s: slot %d, task %d: n_predict is not set and self-context extend is disabled."
+                    " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop\n", __func__, slot.id, slot.id_task);
         }
 
-        LOG_VERBOSE("next token", {
-            {"id_slot",        slot.id},
-            {"id_task",        slot.id_task},
-            {"token",          result.tok},
-            {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
-            {"has_next_token", slot.has_next_token},
-            {"n_remain",       slot.n_remaining},
-            {"n_decoded",      slot.n_decoded},
-            {"stopped_eos",    slot.stopped_eos},
-            {"stopped_word",   slot.stopped_word},
-            {"stopped_limit",  slot.stopped_limit},
-            {"stopping_word",  slot.stopping_word},
-        });
+        //LOG_VERBOSE("next token", {
+        //    {"id_slot",        slot.id},
+        //    {"id_task",        slot.id_task},
+        //    {"token",          result.tok},
+        //    {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
+        //    {"has_next_token", slot.has_next_token},
+        //    {"n_remain",       slot.n_remaining},
+        //    {"n_decoded",      slot.n_decoded},
+        //    {"stopped_eos",    slot.stopped_eos},
+        //    {"stopped_word",   slot.stopped_word},
+        //    {"stopped_limit",  slot.stopped_limit},
+        //    {"stopping_word",  slot.stopping_word},
+        //});
+        LOG_DBG("%s: slot %d, task %d: next token: '%s'\n", __func__, slot.id, slot.id_task, tokens_to_output_formatted_string(ctx, result.tok).c_str());
 
         return slot.has_next_token; // continue
     }
@@ -1307,10 +1279,7 @@ struct server_context {
     }
 
     void send_error(const int id_task, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
-        LOG_ERROR("task error", {
-            {"id_task", id_task},
-            {"error", error},
-        });
+        LOG_ERR("%s: task id = %d, error: %s\n", __func__, id_task, error.c_str());
 
         server_task_result res;
         res.id       = id_task;
@@ -1429,10 +1398,7 @@ struct server_context {
             }
 
             if (embd == NULL) {
-                LOG_ERROR("failed to get embeddings", {
-                    {"token",  batch.token [i]},
-                        {"seq_id", batch.seq_id[i][0]}
-                });
+                LOG_ERR("%s: failed to get embeddings, token = %d, seq_id = %d\n", __func__, batch.token[i], batch.seq_id[i][0]);
 
                 res.data = json {
                     {"embedding", std::vector<float>(n_embd, 0.0f)},
@@ -1509,7 +1475,8 @@ struct server_context {
         std::vector<server_task> cancel_tasks;
         cancel_tasks.reserve(id_tasks.size());
         for (const auto & id_task : id_tasks) {
-            LOG_VERBOSE("cancel task", {{"id_task", id_task}});
+            LOG_WRN("%s: cancel task, id_task = %d\n", __func__, id_task);
+
             server_task task;
             task.type      = SERVER_TASK_TYPE_CANCEL;
             task.id_target = id_task;
@@ -1588,13 +1555,13 @@ struct server_context {
 
                     if (slot == nullptr) {
                         // if no slot is available, we defer this task for processing later
-                        LOG_VERBOSE("no slot is available", {{"id_task", task.id}});
+                        LOG_DBG("%s: no slot is available, defer task, id_task = %d\n", __func__, task.id);
                         queue_tasks.defer(task);
                         break;
                     }
                     if (slot->is_processing()) {
                         // if requested slot is unavailable, we defer this task for processing later
-                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        LOG_DBG("%s: requested slot is unavailable, defer task, id_task = %d\n", __func__, task.id);
                         queue_tasks.defer(task);
                         break;
                     }
@@ -1616,7 +1583,7 @@ struct server_context {
                     slot->index     = json_value(task.data, "index", 0);
 
                     if (!launch_slot_with_task(*slot, task)) {
-                        LOG_ERROR("error while launching slot", task.data);
+                        LOG_ERR("%s: failed to launch slot with task, id_task = %d\n", __func__, task.id);
                         break;
                     }
                 } break;
@@ -1665,18 +1632,13 @@ struct server_context {
 
                         slots_data.push_back(slot_data);
                     }
-                    LOG_INFO("slot data", {
-                        {"id_task",            task.id},
-                        {"n_idle_slots",       n_idle_slots},
-                        {"n_processing_slots", n_processing_slots}
-                    });
-
-                    LOG_VERBOSE("slot data", {
-                        {"id_task",            task.id},
-                        {"n_idle_slots",       n_idle_slots},
-                        {"n_processing_slots", n_processing_slots},
-                        {"slots",              slots_data}
-                    });
+                    //LOG_VERBOSE("slot data", {
+                    //    {"id_task",            task.id},
+                    //    {"n_idle_slots",       n_idle_slots},
+                    //    {"n_processing_slots", n_processing_slots},
+                    //    {"slots",              slots_data}
+                    //});
+                    LOG_DBG("%s: n_idle_slots = %d, n_processing_slots = %d\n", __func__, n_idle_slots, n_processing_slots);
 
                     server_task_result res;
                     res.id       = task.id;
@@ -1722,7 +1684,7 @@ struct server_context {
                     }
                     if (slot->is_processing()) {
                         // if requested slot is unavailable, we defer this task for processing later
-                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        LOG_DBG("%s: requested slot is unavailable, defer task, id_task = %d\n", __func__, task.id);
                         queue_tasks.defer(task);
                         break;
                     }
@@ -1763,7 +1725,7 @@ struct server_context {
                     }
                     if (slot->is_processing()) {
                         // if requested slot is unavailable, we defer this task for processing later
-                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        LOG_DBG("%s: requested slot is unavailable, defer task, id_task = %d\n", __func__, task.id);
                         queue_tasks.defer(task);
                         break;
                     }
@@ -1811,7 +1773,7 @@ struct server_context {
                     }
                     if (slot->is_processing()) {
                         // if requested slot is unavailable, we defer this task for processing later
-                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        LOG_DBG("%s: requested slot is unavailable, defer task, id_task = %d\n", __func__, task.id);
                         queue_tasks.defer(task);
                         break;
                     }
@@ -1833,7 +1795,7 @@ struct server_context {
                 } break;
             case SERVER_TASK_TYPE_SET_LORA:
                 {
-                    llama_lora_adapters_apply(ctx, lora_adapters);
+                    llama_lora_adapters_apply(ctx, loras);
                     server_task_result result;
                     result.id = task.id;
                     result.stop = true;
@@ -1861,7 +1823,7 @@ struct server_context {
             }
 
             if (all_idle) {
-                LOG_INFO("all slots are idle", {});
+                LOG_INF("%s: all slots are idle\n", __func__);
                 if (system_prompt.empty() && clean_kv_cache) {
                     kv_cache_clear();
                 }
@@ -1871,7 +1833,7 @@ struct server_context {
         }
 
         {
-            LOG_VERBOSE("posting NEXT_RESPONSE", {});
+            LOG_DBG("%s: posting NEXT_RESPONSE\n", __func__);
 
             server_task task;
             task.type      = SERVER_TASK_TYPE_NEXT_RESPONSE;
@@ -1890,17 +1852,18 @@ struct server_context {
                     const int n_left    = (int) system_tokens.size() + slot.n_past - n_keep;
                     const int n_discard = slot.params.n_discard ? slot.params.n_discard : (n_left / 2);
 
-                    LOG_INFO("slot context shift", {
-                        {"id_slot",         slot.id},
-                        {"id_task",         slot.id_task},
-                        {"n_keep",          n_keep},
-                        {"n_left",          n_left},
-                        {"n_discard",       n_discard},
-                        {"n_ctx",           n_ctx},
-                        {"n_past",          slot.n_past},
-                        {"n_system_tokens", system_tokens.size()},
-                        {"n_cache_tokens",  slot.cache_tokens.size()}
-                    });
+                    //LOG_INFO("slot context shift", {
+                    //    {"id_slot",         slot.id},
+                    //    {"id_task",         slot.id_task},
+                    //    {"n_keep",          n_keep},
+                    //    {"n_left",          n_left},
+                    //    {"n_discard",       n_discard},
+                    //    {"n_ctx",           n_ctx},
+                    //    {"n_past",          slot.n_past},
+                    //    {"n_system_tokens", system_tokens.size()},
+                    //    {"n_cache_tokens",  slot.cache_tokens.size()}
+                    //});
+                    LOG_INF("%s: slot context shift, id_slot = %d, id_task = %d, n_keep = %d, n_left = %d, n_discard = %d\n", __func__, slot.id, slot.id_task, n_keep, n_left, n_discard);
 
                     llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
                     llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
@@ -1943,15 +1906,16 @@ struct server_context {
                 slot.cache_tokens.push_back(slot.sampled);
             }
 
-            LOG_VERBOSE("slot decode token", {
-                {"id_slot",         slot.id},
-                {"id_task",         slot.id_task},
-                {"n_ctx",           n_ctx},
-                {"n_past",          slot.n_past},
-                {"n_system_tokens", system_tokens.size()},
-                {"n_cache_tokens",  slot.cache_tokens.size()},
-                {"truncated",       slot.truncated}
-            });
+            //LOG_VERBOSE("slot decode token", {
+            //    {"id_slot",         slot.id},
+            //    {"id_task",         slot.id_task},
+            //    {"n_ctx",           n_ctx},
+            //    {"n_past",          slot.n_past},
+            //    {"n_system_tokens", system_tokens.size()},
+            //    {"n_cache_tokens",  slot.cache_tokens.size()},
+            //    {"truncated",       slot.truncated}
+            //});
+            LOG_DBG("%s: slot decode token, id_slot = %d, id_task = %d, n_ctx = %d, n_past = %d, n_system_tokens = %d, n_cache_tokens = %d, truncated = %d\n", __func__, slot.id, slot.id_task, slot.n_ctx, slot.n_past, (int) system_tokens.size(), (int) slot.cache_tokens.size(), slot.truncated);
         }
 
         // process in chunks of params.n_batch
@@ -1972,10 +1936,11 @@ struct server_context {
 
                     // we haven't tokenized the prompt yet - do it now:
                     if (prompt_tokens.empty()) {
-                        LOG_VERBOSE("tokenizing prompt", {
-                            {"id_slot", slot.id},
-                            {"id_task", slot.id_task}
-                        });
+                        //LOG_VERBOSE("tokenizing prompt", {
+                        //    {"id_slot", slot.id},
+                        //    {"id_task", slot.id_task}
+                        //});
+                        LOG_DBG("%s: tokenizing prompt, id_slot = %d, id_task = %d\n", __func__, slot.id, slot.id_task);
 
                         slot.t_start_process_prompt = ggml_time_us();
                         slot.t_start_generation = 0;
@@ -2019,21 +1984,22 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
-                        LOG_VERBOSE("prompt tokenized", {
-                            {"id_slot",         slot.id},
-                            {"id_task",         slot.id_task},
-                            {"n_ctx",           slot.n_ctx},
-                            {"n_keep",          slot.params.n_keep},
-                            {"n_prompt_tokens", slot.n_prompt_tokens},
-                            {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
-                        });
+                        //LOG_VERBOSE("prompt tokenized", {
+                        //    {"id_slot",         slot.id},
+                        //    {"id_task",         slot.id_task},
+                        //    {"n_ctx",           slot.n_ctx},
+                        //    {"n_keep",          slot.params.n_keep},
+                        //    {"n_prompt_tokens", slot.n_prompt_tokens},
+                        //    {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                        //});
+                        LOG_DBG("%s: prompt tokenized, id_slot = %d, id_task = %d, n_ctx = %d, n_keep = %d, n_prompt_tokens = %d\n", __func__, slot.id, slot.id_task, slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
 
                         // empty prompt passed -> release the slot and send empty response
                         if (prompt_tokens.empty()) {
-                            LOG_INFO("empty prompt - releasing slot", {
-                                {"id_slot", slot.id},
-                                {"id_task", slot.id_task}
-                            });
+                            //LOG_INFO("empty prompt - releasing slot", {
+                            //    {"id_slot", slot.id},
+                            //    {"id_task", slot.id_task}
+                            //});
 
                             slot.release();
                             slot.print_timings();
@@ -2075,15 +2041,16 @@ struct server_context {
                                 slot.truncated = true;
                                 slot.n_prompt_tokens = prompt_tokens.size();
 
-                                LOG_VERBOSE("input truncated", {
-                                    {"id_slot",         slot.id},
-                                    {"id_task",         slot.id_task},
-                                    {"n_ctx",           slot.n_ctx},
-                                    {"n_keep",          slot.params.n_keep},
-                                    {"n_left",          n_left},
-                                    {"n_prompt_tokens", slot.n_prompt_tokens},
-                                    {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
-                                });
+                                //LOG_VERBOSE("input truncated", {
+                                //    {"id_slot",         slot.id},
+                                //    {"id_task",         slot.id_task},
+                                //    {"n_ctx",           slot.n_ctx},
+                                //    {"n_keep",          slot.params.n_keep},
+                                //    {"n_left",          n_left},
+                                //    {"n_prompt_tokens", slot.n_prompt_tokens},
+                                //    {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
+                                //});
+                                LOG_DBG("%s: input truncated, id_slot = %d, id_task = %d, n_ctx = %d, n_keep = %d, n_left = %d, n_prompt_tokens = %d\n", __func__, slot.id, slot.id_task, slot.n_ctx, slot.params.n_keep, n_left, slot.n_prompt_tokens);
 
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
@@ -2108,10 +2075,7 @@ struct server_context {
 
                         if (slot.n_past == slot.n_prompt_tokens && slot.n_past > 0) {
                             // we have to evaluate at least 1 token to generate logits.
-                            LOG_INFO("we have to evaluate at least 1 token to generate logits", {
-                                { "id_slot", slot.id },
-                                { "id_task", slot.id_task }
-                            });
+                            LOG_WRN("%s: need to evaluate at least 1 token to generate logits, id_slot = %d, id_task = %d\n", __func__, slot.id, slot.id_task);
 
                             slot.n_past--;
                             if (slot.ga_i > 0) {
@@ -2160,11 +2124,7 @@ struct server_context {
                     // remove the non-common part from the cache
                     slot.cache_tokens.resize(slot.n_past);
 
-                    LOG_INFO("kv cache rm [p0, end)", {
-                        { "id_slot", slot.id },
-                        { "id_task", slot.id_task },
-                        { "p0",      p0 }
-                    });
+                    LOG_INF("%s: kv cache rm [%d, end), id_slot = %d, id_task = %d\n", __func__, p0, slot.id, slot.id_task);
 
                     int32_t slot_npast = slot.n_past_se > 0 ? slot.n_past_se : slot.n_past;
 
@@ -2193,13 +2153,14 @@ struct server_context {
                         slot_npast++;
                     }
 
-                    LOG_VERBOSE("prompt processing progress", {
-                        {"id_slot",  slot.id},
-                        {"n_past",   slot.n_past},
-                        {"n_ctx",    n_ctx},
-                        {"n_tokens", batch.n_tokens},
-                        {"progress", (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens},
-                    });
+                    //LOG_VERBOSE("prompt processing progress", {
+                    //    {"id_slot",  slot.id},
+                    //    {"n_past",   slot.n_past},
+                    //    {"n_ctx",    n_ctx},
+                    //    {"n_tokens", batch.n_tokens},
+                    //    {"progress", (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens},
+                    //});
+                    LOG_DBG("%s: prompt processing progress, id_slot = %d, n_past = %d, n_ctx = %d, n_tokens = %d, progress = %f\n", __func__, slot.id, slot.n_past, n_ctx, batch.n_tokens, (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens);
 
                     // entire prompt has been processed
                     if (slot.n_past == slot.n_prompt_tokens) {
@@ -2213,12 +2174,13 @@ struct server_context {
                         slot.n_decoded = 0;
                         slot.i_batch   = batch.n_tokens - 1;
 
-                        LOG_VERBOSE("prompt done", {
-                            {"id_slot",  slot.id},
-                            {"n_past",   slot.n_past},
-                            {"n_ctx",    n_ctx},
-                            {"n_tokens", batch.n_tokens},
-                        });
+                        //LOG_VERBOSE("prompt done", {
+                        //    {"id_slot",  slot.id},
+                        //    {"n_past",   slot.n_past},
+                        //    {"n_ctx",    n_ctx},
+                        //    {"n_tokens", batch.n_tokens},
+                        //});
+                        LOG_DBG("%s: prompt done, id_slot = %d, n_past = %d, n_ctx = %d, n_tokens = %d\n", __func__, slot.id, slot.n_past, n_ctx, batch.n_tokens);
                     }
                 }
 
@@ -2229,13 +2191,11 @@ struct server_context {
         }
 
         if (batch.n_tokens == 0) {
-            LOG_VERBOSE("no tokens to decode", {});
+            LOG_DBG("%s: no tokens to decode\n", __func__);
             return;
         }
 
-        LOG_VERBOSE("decoding batch", {
-            {"n_tokens", batch.n_tokens},
-        });
+        LOG_DBG("%s: decoding batch, n_tokens = %d\n", __func__, batch.n_tokens);
 
         // make sure we're in the right embedding mode
         llama_set_embeddings(ctx, batch_type == 1);
@@ -2290,11 +2250,7 @@ struct server_context {
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
-                    LOG_ERROR("failed to decode the batch: KV cache is full - try increasing it via the context size", {
-                        {"i",       i},
-                        {"n_batch", n_batch},
-                        {"ret",     ret},
-                    });
+                    LOG_ERR("%s: failed to decode the batch: KV cache is full - try increasing it via the context size, i = %d, n_batch = %d, ret = %d\n", __func__, i, n_batch, ret);
                     for (auto & slot : slots) {
                         slot.release();
                         send_error(slot, "Input prompt is too big compared to KV size. Please try increasing KV size.");
@@ -2306,11 +2262,7 @@ struct server_context {
                 n_batch /= 2;
                 i -= n_batch;
 
-                LOG_WARNING("failed to find free space in the KV cache, retrying with smaller batch size - try increasing it via the context size or enable defragmentation", {
-                    {"i",       i},
-                    {"n_batch", n_batch},
-                    {"ret",     ret},
-                });
+                LOG_WRN("%s: failed to find free space in the KV cache, retrying with smaller batch size - try increasing it via the context size or enable defragmentation, i = %d, n_batch = %d, ret = %d\n", __func__, i, n_batch, ret);
 
                 continue; // continue loop of n_batch
             }
@@ -2370,7 +2322,7 @@ struct server_context {
             }
         }
 
-        LOG_VERBOSE("run slots completed", {});
+        LOG_DBG("%s: run slots completed\n", __func__);
     }
 
     json model_meta() const {
@@ -2391,19 +2343,18 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
         return;
     }
 
-    LOG_INFO("request", {
-        {"remote_addr", req.remote_addr},
-        {"remote_port", req.remote_port},
-        {"status",      res.status},
-        {"method",      req.method},
-        {"path",        req.path},
-        {"params",      req.params},
-    });
+    //LOG_INFO("request", {
+    //    {"remote_addr", req.remote_addr},
+    //    {"remote_port", req.remote_port},
+    //    {"status",      res.status},
+    //    {"method",      req.method},
+    //    {"path",        req.path},
+    //    {"params",      req.params},
+    //});
+    LOG_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
 
-    LOG_VERBOSE("request", {
-        {"request",  req.body},
-        {"response", res.body},
-    });
+    LOG_DBG("request:  %s\n", req.body.c_str());
+    LOG_DBG("response: %s\n", res.body.c_str());
 }
 
 std::function<void(int)> shutdown_handler;
@@ -2434,9 +2385,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // TODO: not great to use extern vars
-    server_log_json = params.log_json;
-    server_verbose = params.verbosity > 0;
+    const bool verbose = params.verbosity > 0;
 
     // struct that contains llama context and inference
     server_context ctx_server;
@@ -2452,17 +2401,12 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    LOG_INFO("build info", {
-        {"build",  LLAMA_BUILD_NUMBER},
-        {"commit", LLAMA_COMMIT}
-    });
+    LOG_INF("build: %d %s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
 
-    LOG_INFO("system info", {
-        {"n_threads",       params.cpuparams.n_threads},
-        {"n_threads_batch", params.cpuparams_batch.n_threads},
-        {"total_threads",   std::thread::hardware_concurrency()},
-        {"system_info",     llama_print_system_info()},
-    });
+    LOG_INF("system info: n_threads = %d, n_threads_batch = %d, total_threads = %d\n", params.cpuparams.n_threads, params.cpuparams_batch.n_threads, std::thread::hardware_concurrency());
+    LOG_INF("\n");
+    LOG_INF("%s\n", gpt_params_get_system_info(params).c_str());
+    LOG_INF("\n");
 
     std::unique_ptr<httplib::Server> svr;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
@@ -2508,7 +2452,7 @@ int main(int argc, char ** argv) {
     svr->set_exception_handler([&res_error](const httplib::Request &, httplib::Response & res, std::exception_ptr ep) {
         std::string message;
         try {
-            std::rethrow_exception(std::move(ep));
+            std::rethrow_exception(ep);
         } catch (std::exception & e) {
             message = e.what();
         } catch (...) {
@@ -2516,7 +2460,7 @@ int main(int argc, char ** argv) {
         }
 
         json formatted_error = format_error_response(message, ERROR_TYPE_SERVER);
-        LOG_VERBOSE("Got exception", formatted_error);
+        LOG_WRN("got exception: %s\n", formatted_error.dump().c_str());
         res_error(res, formatted_error);
     });
 
@@ -2591,7 +2535,7 @@ int main(int argc, char ** argv) {
         // API key is invalid or not provided
         res_error(res, format_error_response("Invalid API Key", ERROR_TYPE_AUTHENTICATION));
 
-        LOG_WARNING("Unauthorized: Invalid API Key", {});
+        LOG_WRN("Unauthorized: Invalid API Key\n");
 
         return false;
     };
@@ -2950,7 +2894,7 @@ int main(int argc, char ** argv) {
     };
 
     // TODO: maybe merge this function with "handle_completions_generic"
-    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_chat_completions = [&ctx_server, &params, &res_error, &res_ok, verbose](const httplib::Request & req, httplib::Response & res) {
         if (ctx_server.params.embedding) {
             res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
@@ -2969,7 +2913,7 @@ int main(int argc, char ** argv) {
         if (!stream) {
             ctx_server.receive_cmpl_results(task_ids, [&](std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
-                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id);
+                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, verbose);
                 res_ok(res, result_oai);
             }, [&](json error_data) {
                 res_error(res, error_data);
@@ -3090,12 +3034,12 @@ int main(int argc, char ** argv) {
 
     const auto handle_lora_adapters_list = [&](const httplib::Request &, httplib::Response & res) {
         json result = json::array();
-        for (size_t i = 0; i < ctx_server.lora_adapters.size(); ++i) {
-            auto & la = ctx_server.lora_adapters[i];
+        for (size_t i = 0; i < ctx_server.loras.size(); ++i) {
+            auto & lora = ctx_server.loras[i];
             result.push_back({
                 {"id", i},
-                {"path", la.path},
-                {"scale", la.scale},
+                {"path", lora.path},
+                {"scale", lora.scale},
             });
         }
         res_ok(res, result);
@@ -3104,11 +3048,11 @@ int main(int argc, char ** argv) {
 
     const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
         const std::vector<json> body = json::parse(req.body);
-        int max_idx = ctx_server.lora_adapters.size();
+        int max_idx = ctx_server.loras.size();
 
         // clear existing value
-        for (auto & la : ctx_server.lora_adapters) {
-            la.scale = 0.0f;
+        for (auto & lora : ctx_server.loras) {
+            lora.scale = 0.0f;
         }
 
         // set value
@@ -3116,7 +3060,7 @@ int main(int argc, char ** argv) {
             int id      = entry.at("id");
             float scale = entry.at("scale");
             if (0 <= id && id < max_idx) {
-                ctx_server.lora_adapters[id].scale = scale;
+                ctx_server.loras[id].scale = scale;
             } else {
                 throw std::runtime_error("invalid adapter id");
             }
@@ -3211,58 +3155,58 @@ int main(int argc, char ** argv) {
 
     // bind HTTP listen port, run the HTTP server in a thread
     if (!svr->bind_to_port(params.hostname, params.port)) {
-        LOG_ERROR("couldn't bind HTTP server socket", {
-            {"hostname", params.hostname},
-            {"port", params.port},
-        });
+        //LOG_ERROR("couldn't bind HTTP server socket", {
+        //    {"hostname", params.hostname},
+        //    {"port", params.port},
+        //});
+        LOG_ERR("%s: couldn't bind HTTP server socket, hostname: %s, port: %d\n", __func__, params.hostname.c_str(), params.port);
         clean_up();
-        LOG_ERROR("exiting due to HTTP server error", {});
         return 1;
     }
     std::thread t([&]() { svr->listen_after_bind(); });
     svr->wait_until_ready();
 
-    LOG_INFO("HTTP server is listening", log_data);
+    //LOG_INFO("HTTP server is listening", log_data);
+    LOG_INF("%s: HTTP server is listening, hostname: %s, port: %d, http threads: %d\n", __func__, params.hostname.c_str(), params.port, params.n_threads_http);
 
     // load the model
-    LOG_INFO("loading model", log_data);
+    LOG_INF("%s: loading model\n", __func__);
+
     if (!ctx_server.load_model(params)) {
         clean_up();
         t.join();
-        LOG_ERROR("exiting due to model loading error", {});
+        LOG_ERR("%s: exiting due to model loading error\n", __func__);
         return 1;
-    } else {
-        ctx_server.init();
-        state.store(SERVER_STATE_READY);
-
-        LOG_INFO("model loaded", {});
-
-        // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
-        if (params.chat_template.empty()) {
-            if (!ctx_server.validate_model_chat_template()) {
-                LOG_WARNING("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
-                params.chat_template = "chatml";
-            }
-        }
-
-        // print sample chat example to make it clear which template is used
-        {
-            LOG_INFO("chat template", {
-                {"chat_example", llama_chat_format_example(ctx_server.model, params.chat_template)},
-                {"built_in",     params.chat_template.empty()},
-            });
-        }
-
-        ctx_server.queue_tasks.on_new_task(std::bind(
-            &server_context::process_single_task, &ctx_server, std::placeholders::_1));
-        ctx_server.queue_tasks.on_update_slots(std::bind(
-            &server_context::update_slots, &ctx_server));
-
-        shutdown_handler = [&](int) {
-            ctx_server.queue_tasks.terminate();
-        };
-        ctx_server.queue_tasks.start_loop();
     }
+
+    ctx_server.init();
+    state.store(SERVER_STATE_READY);
+
+    LOG_INF("%s: model loaded\n", __func__);
+
+    // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
+    if (params.chat_template.empty()) {
+        if (!ctx_server.validate_model_chat_template()) {
+            LOG_WRN("%s: The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses\n", __func__);
+            params.chat_template = "chatml";
+        }
+    }
+
+    // print sample chat example to make it clear which template is used
+    LOG_INF("%s: chat template, built_in: %d, chat_example: %s\n", __func__, params.chat_template.empty(), llama_chat_format_example(ctx_server.model, params.chat_template).c_str());
+
+    ctx_server.queue_tasks.on_new_task(std::bind(
+                &server_context::process_single_task, &ctx_server, std::placeholders::_1));
+    ctx_server.queue_tasks.on_update_slots(std::bind(
+                &server_context::update_slots, &ctx_server));
+
+    shutdown_handler = [&](int) {
+        ctx_server.queue_tasks.terminate();
+    };
+
+    LOG_INF("%s: server is listening on %s:%d - starting the main loop\n", __func__, params.hostname.c_str(), params.port);
+
+    ctx_server.queue_tasks.start_loop();
 
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
     struct sigaction sigint_action;

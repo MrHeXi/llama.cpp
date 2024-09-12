@@ -676,7 +676,7 @@ int main(int argc, char ** argv) {
 
             const llama_token id = gpt_sampler_sample(smpl, ctx, -1);
 
-            gpt_sampler_accept(smpl, id, /* apply_grammar= */ true);
+            gpt_sampler_accept(smpl, id, /* accept_grammar= */ true);
 
             // LOG_DBG("last: %s\n", string_from(ctx, smpl->prev.to_vector()).c_str());
 
@@ -697,7 +697,7 @@ int main(int argc, char ** argv) {
 
                 // push the prompt in the sampling context in order to apply repetition penalties later
                 // for the prompt, we don't apply grammar rules
-                gpt_sampler_accept(smpl, embd_inp[n_consumed], /* apply_grammar= */ false);
+                gpt_sampler_accept(smpl, embd_inp[n_consumed], /* accept_grammar= */ false);
 
                 ++n_consumed;
                 if ((int) embd.size() >= params.n_batch) {

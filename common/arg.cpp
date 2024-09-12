@@ -1819,19 +1819,6 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
-        {"--log-format"}, "{text, json}",
-        "log output format: json or text (default: json)",
-        [](gpt_params & params, const std::string & value) {
-            if (value == "json") {
-                params.log_json = true;
-            } else if (value == "text") {
-                params.log_json = false;
-            } else {
-                throw std::invalid_argument("invalid value");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
-    add_opt(llama_arg(
         {"--metrics"},
         format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),
         [](gpt_params & params) {
