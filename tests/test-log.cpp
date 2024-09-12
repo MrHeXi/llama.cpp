@@ -33,7 +33,5 @@ int main() {
         threads[i].join();
     }
 
-    gpt_log_free(gpt_log_main());
-
     return 0;
 }
