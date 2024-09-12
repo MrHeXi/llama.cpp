@@ -295,9 +295,9 @@ static json probs_vector_to_json(const llama_context * ctx, const std::vector<co
 static bool server_sent_event(httplib::DataSink & sink, const char * event, const json & data) {
     const std::string str =
         std::string(event) + ": " +
-        data.dump(-1, ' ', false, json::error_handler_t::replace);
+        data.dump(-1, ' ', false, json::error_handler_t::replace) + "\n\n";
 
-    LOG_DBG("data stream, to_send: %s\n\n", str.c_str());
+    LOG_DBG("data stream, to_send: %s", str.c_str());
 
     return sink.write(str.c_str(), str.size());
 }

@@ -116,14 +116,14 @@ jobs:
         id: server_integration_tests
         run: |
           cd examples/server/tests
-          PORT=8888 ./tests.sh
+          LLAMA_LOG=10 PORT=8888 ./tests.sh
 
       - name: Slow tests
         id: server_integration_tests_slow
         if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
-          PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
+          LLAMA_LOG=10 PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
 
 
   server-windows:
