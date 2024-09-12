@@ -1967,7 +1967,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
     ));
     add_opt(llama_arg(
         {"--log-verbosity"}, "THOLD",
-        "Set the verbosity threshold. Messages with a lower verbosity will be ignored.",
+        "Set the verbosity threshold. Messages with a higher verbosity will be ignored.",
         [](gpt_params &, int value) {
             gpt_log_set_verbosity_thold(value);
         }
